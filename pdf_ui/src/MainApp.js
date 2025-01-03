@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { useNavigate } from 'react-router-dom';
 import { Container, Box, Typography, Button } from '@mui/material';
+import LoadingIndicator from './components/LoadingIndicator';
 import { ThemeProvider } from '@mui/material/styles';
 import Header from './components/Header';
 import UploadSection from './components/UploadSection';
@@ -56,11 +57,16 @@ function MainApp({ isLoggingOut, setIsLoggingOut }) {
 
   // Monitor authentication status within MainApp
   useEffect(() => {
-    if (!auth.isAuthenticated && !isLoggingOut) {
-      // If user is not authenticated, redirect to /home
-      navigate('/home', { replace: true });
+    if (auth.isLoading) {
+      return; // Wait while loading
     }
-  }, [auth.isAuthenticated, isLoggingOut, navigate]);
+
+    if (!auth.isAuthenticated && !isLoggingOut) {
+      // If user is not authenticated and not actively logging out, redirect to home
+      navigate('/home', { replace: true });
+      return; // Exit early to prevent render
+    }
+  }, [auth.isLoading, auth.isAuthenticated, isLoggingOut, navigate]);
 
   // Handle events from child components
   const handleUploadComplete = (fileName) => {
@@ -93,19 +99,12 @@ function MainApp({ isLoggingOut, setIsLoggingOut }) {
 
   // Handle authentication loading and errors
   if (auth.isLoading) {
-    return <div>Loading...</div>;
+    return <LoadingIndicator message="Loading application..." />;
   }
 
   if (auth.error) {
-    // Example: handle "No matching state found" error
-    if (auth.error.message.includes('No matching state found')) {
-      console.log('Detected invalid or mismatched OIDC state. Redirecting to login...');
-      auth.removeUser().then(() => {
-        auth.signinRedirect();
-      });
-      return null;
-    }
-    return <div>Encountered error: {auth.error.message}</div>;
+    console.error('Authentication error in MainApp:', auth.error);
+    return <LoadingIndicator message="Redirecting to login..." />;
   }
 
   return (

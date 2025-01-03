@@ -2,22 +2,27 @@
 import React, { useEffect } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { useNavigate } from 'react-router-dom';
+import LoadingIndicator from '../components/LoadingIndicator';
 
 function CallbackPage() {
   const auth = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!auth.isLoading && auth.isAuthenticated) {
-      // After successful authentication, navigate to /app/dashboard or any default route
-      navigate('/app/dashboard', { replace: true });
-    } else if (!auth.isLoading && !auth.isAuthenticated) {
-      // If authentication failed, navigate to /home
+    if (auth.isLoading) {
+      return; // Wait while loading
+    }
+    
+    if (auth.isAuthenticated) {
+      // After successful authentication, navigate to /app
+      navigate('/app', { replace: true });
+    } else if (auth.error) {
+      console.error('Authentication error:', auth.error);
       navigate('/home', { replace: true });
     }
-  }, [auth.isLoading, auth.isAuthenticated, navigate]);
+  }, [auth.isLoading, auth.isAuthenticated, auth.error, navigate]);
 
-  return <div>Processing authentication...</div>;
+  return <LoadingIndicator message="Processing authentication..." />;
 }
 
 export default CallbackPage;
