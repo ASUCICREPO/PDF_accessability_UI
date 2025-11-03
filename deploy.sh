@@ -225,7 +225,7 @@ aws codebuild create-project \
   --environment "$BACKEND_ENVIRONMENT" \
   --service-role "$ROLE_ARN" \
   --output json \
-  --no-cli-pager
+  # --no-cli-pager
 
 if [ $? -ne 0 ]; then
   echo "✗ Failed to create backend CodeBuild project"
@@ -240,8 +240,7 @@ echo "Starting backend build for project '$BACKEND_PROJECT_NAME'..."
 BACKEND_BUILD_ID=$(aws codebuild start-build \
   --project-name "$BACKEND_PROJECT_NAME" \
   --query 'build.id' \
-  --output text \
-  --no-cli-pager)
+  --output text )
 
 if [ $? -ne 0 ]; then
   echo "✗ Failed to start the backend build"
@@ -256,7 +255,7 @@ BUILD_STATUS="IN_PROGRESS"
 
 while [ "$BUILD_STATUS" = "IN_PROGRESS" ]; do
   sleep 15
-  BUILD_STATUS=$(aws codebuild batch-get-builds --ids "$BACKEND_BUILD_ID" --query 'builds[0].buildStatus' --output text --no-cli-pager)
+  BUILD_STATUS=$(aws codebuild batch-get-builds --ids "$BACKEND_BUILD_ID" --query 'builds[0].buildStatus' --output text )
   echo "Backend build status: $BUILD_STATUS"
 done
 

@@ -34,7 +34,7 @@ get_cdk_outputs() {
     --stack-name $STACK_NAME \
     --query 'Stacks[0].Outputs' \
     --output json \
-    --no-cli-pager
+    # --no-cli-pager
 }
 
 # Get all outputs
@@ -45,7 +45,7 @@ if [ $? -ne 0 ] || [ -z "$CDK_OUTPUTS" ] || [ "$CDK_OUTPUTS" = "null" ]; then
   echo "❌ Error: Could not retrieve CDK stack outputs"
   echo "Debug: CDK_OUTPUTS = '$CDK_OUTPUTS'"
   echo "Available stacks:"
-  aws cloudformation list-stacks --query 'StackSummaries[?StackStatus==`CREATE_COMPLETE` || StackStatus==`UPDATE_COMPLETE`].StackName' --no-cli-pager
+  aws cloudformation list-stacks --query 'StackSummaries[?StackStatus==`CREATE_COMPLETE` || StackStatus==`UPDATE_COMPLETE`].StackName' 
   exit 1
 fi
 
@@ -179,7 +179,7 @@ aws codebuild create-project \
   --environment "$FRONTEND_ENVIRONMENT" \
   --service-role "$ROLE_ARN" \
   --output json \
-  --no-cli-pager
+  # --no-cli-pager
 
 if [ $? -ne 0 ]; then
   echo "✗ Failed to create frontend CodeBuild project"
@@ -194,8 +194,7 @@ echo "Starting frontend build for project '$FRONTEND_PROJECT_NAME'..."
 FRONTEND_BUILD_ID=$(aws codebuild start-build \
   --project-name "$FRONTEND_PROJECT_NAME" \
   --query 'build.id' \
-  --output text \
-  --no-cli-pager)
+  --output text)
 
 if [ $? -ne 0 ]; then
   echo "✗ Failed to start the frontend build"
@@ -210,7 +209,7 @@ BUILD_STATUS="IN_PROGRESS"
 
 while [ "$BUILD_STATUS" = "IN_PROGRESS" ]; do
   sleep 15
-  BUILD_STATUS=$(aws codebuild batch-get-builds --ids "$FRONTEND_BUILD_ID" --query 'builds[0].buildStatus' --output text --no-cli-pager)
+  BUILD_STATUS=$(aws codebuild batch-get-builds --ids "$FRONTEND_BUILD_ID" --query 'builds[0].buildStatus' --output text )
   echo "Frontend build status: $BUILD_STATUS"
 done
 
