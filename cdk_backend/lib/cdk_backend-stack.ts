@@ -108,7 +108,7 @@ export class CdkBackendStack extends cdk.Stack {
 
     // Create the Lambda with the role
     const postConfirmationFn = new lambda.Function(this, 'PostConfirmationLambda', {
-      runtime: lambda.Runtime.PYTHON_3_9,
+      runtime: lambda.Runtime.PYTHON_3_12,
       handler: 'index.handler',
       code: lambda.Code.fromAsset('lambda/postConfirmation/'),
       timeout: cdk.Duration.seconds(30),
@@ -283,7 +283,7 @@ export class CdkBackendStack extends cdk.Stack {
 
     // ------------------- Lambda Function for Post Confirmation -------------------
     const updateAttributesFn = new lambda.Function(this, 'UpdateAttributesFn', {
-      runtime: lambda.Runtime.PYTHON_3_9,
+      runtime: lambda.Runtime.PYTHON_3_12,
       handler: 'index.handler',
       code: lambda.Code.fromAsset('lambda/updateAttributes/'),
       timeout: cdk.Duration.seconds(30),
@@ -311,7 +311,7 @@ export class CdkBackendStack extends cdk.Stack {
 
     // 3) Create the Lambda function
     const checkOrIncrementQuotaFn = new lambda.Function(this, 'checkOrIncrementQuotaFn', {
-      runtime: lambda.Runtime.PYTHON_3_9,
+      runtime: lambda.Runtime.PYTHON_3_12,
       code: lambda.Code.fromAsset('lambda/checkOrIncrementQuota'),  
       handler: 'index.handler',
       timeout: cdk.Duration.seconds(30),
@@ -407,7 +407,7 @@ export class CdkBackendStack extends cdk.Stack {
 
     // 2. Create the Lambda function
     const updateAttributesGroupsFn = new lambda.Function(this, 'UpdateAttributesGroupsFn', {
-      runtime: lambda.Runtime.PYTHON_3_9,
+      runtime: lambda.Runtime.PYTHON_3_12,
       handler: 'index.handler',
       code: lambda.Code.fromAsset('lambda/UpdateAttributesGroups/'), // Ensure this path is correct
       timeout: cdk.Duration.seconds(900),

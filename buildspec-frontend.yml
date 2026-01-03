@@ -4,7 +4,7 @@ phases:
   install:
     runtime-versions:
       nodejs: 20
-      python: 3.9
+      python: 3.12
     commands:
       - echo "Installing zip utility..."
       - yum install -y zip
