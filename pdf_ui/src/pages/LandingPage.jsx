@@ -359,7 +359,7 @@ const LandingPage = () => {
             <Typography variant="body1" component="h3">
             Watch a recorded demo and review technical architecture:{' '}
               <StyledLink
-                href="https://www.youtube.com/watch?v=Wl2Ut1AorLY"
+                href="https://youtu.be/BFGN7tC1trA?si=uGGEifk22UrAR8fJ"
                 target="_blank"
                 rel="noopener"
                 sx={{ ml: 0.5 }}
