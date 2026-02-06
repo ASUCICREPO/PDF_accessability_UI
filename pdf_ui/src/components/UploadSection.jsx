@@ -9,7 +9,7 @@ import imgFileText from '../assets/pdf-icon.svg';
 import imgCodeXml from '../assets/pdf-html.svg';
 import './UploadSection.css';
 
-import { region, PDFBucket, HTMLBucket, CheckAndIncrementQuota, validateBucketConfiguration, validateFormatBucket } from '../utilities/constants';
+import { region, PDFBucket, HTMLBucket, CheckAndIncrementQuota, JobHistoryAPI, validateBucketConfiguration, validateFormatBucket } from '../utilities/constants';
 
 function sanitizeFilename(filename, format = 'pdf') {
   // Normalize the filename to decompose accented characters
@@ -53,6 +53,7 @@ function UploadSection({ onUploadComplete, awsCredentials, currentUsage, maxFile
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedFormat, setSelectedFormat] = useState(null);
   const [fileSizeMB, setFileSizeMB] = useState(0);
+  const [pageCount, setPageCount] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [openSnackbar, setOpenSnackbar] = useState(false);
@@ -150,6 +151,7 @@ function UploadSection({ onUploadComplete, awsCredentials, currentUsage, maxFile
       }
 
       setSelectedFile(file);
+      setPageCount(numPages);
       console.log('File object details:', {
         name: file.name,
         size: file.size,
@@ -287,8 +289,35 @@ function UploadSection({ onUploadComplete, awsCredentials, currentUsage, maxFile
 
       console.log('Upload complete, new file name:', uniqueFilename);
 
-      // **6. Notify Parent of Completion with format**
-      onUploadComplete(uniqueFilename, sanitizedFileName, selectedFormat || 'pdf');
+      // **6. Create job history record**
+      let jobCreatedAt = null;
+      if (JobHistoryAPI) {
+        try {
+          const jobRes = await fetch(JobHistoryAPI, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`
+            },
+            body: JSON.stringify({
+              filename: file.name,
+              format: selectedFormat || 'pdf',
+              s3_bucket: selectedBucket,
+              s3_upload_key: `${keyPrefix}${uniqueFilename}`,
+              page_count: pageCount,
+            }),
+          });
+          if (jobRes.ok) {
+            const jobData = await jobRes.json();
+            jobCreatedAt = jobData.created_at;
+          }
+        } catch (err) {
+          console.error('Failed to create job record:', err);
+        }
+      }
+
+      // **7. Notify Parent of Completion with format**
+      onUploadComplete(uniqueFilename, sanitizedFileName, selectedFormat || 'pdf', selectedBucket, `${keyPrefix}${uniqueFilename}`, jobCreatedAt);
 
       // **7. Refresh Usage**
       if (onUsageRefresh) {

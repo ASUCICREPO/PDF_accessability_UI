@@ -2,12 +2,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { useNavigate } from 'react-router-dom';
-import { Container, Box } from '@mui/material';
+import { Container, Box, Tabs, Tab } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
 import Header from './components/Header';
 import UploadSection from './components/UploadSection';
 import ProcessingContainer from './components/ProcessingContainer';
 import ResultsContainer from './components/ResultsContainer';
+import JobHistory from './components/JobHistory';
 import LeftNav from './components/LeftNav';
 import theme from './theme';
 import FirstSignInDialog from './components/FirstSignInDialog';
@@ -25,6 +26,7 @@ function MainApp({ isLoggingOut, setIsLoggingOut }) {
   // AWS & file states
   const [awsCredentials, setAwsCredentials] = useState(null);
   const [currentPage, setCurrentPage] = useState('upload');
+  const [activeTab, setActiveTab] = useState(0);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [processedResult, setProcessedResult] = useState(null);
   const [processingStartTime, setProcessingStartTime] = useState(null);
@@ -160,16 +162,17 @@ function MainApp({ isLoggingOut, setIsLoggingOut }) {
   };
 
   // Handle events from child components
-  const handleUploadComplete = (updated_filename, original_fileName, format = 'pdf') => {
+  const handleUploadComplete = (updated_filename, original_fileName, format = 'pdf', s3Bucket = null, s3UploadKey = null, jobCreatedAt = null) => {
     console.log('Upload completed, new file name:', updated_filename);
-    console.log('Original file name:', original_fileName);
-    console.log('Selected format:', format);
 
     const fileData = {
       name: original_fileName,
       updatedName: updated_filename,
       format: format,
-      size: 0 // We'll get this from the upload component if needed
+      size: 0,
+      s3Bucket: s3Bucket,
+      s3UploadKey: s3UploadKey,
+      jobCreatedAt: jobCreatedAt,
     };
 
     setUploadedFile(fileData);
@@ -256,49 +259,68 @@ function MainApp({ isLoggingOut, setIsLoggingOut }) {
 
           <Container maxWidth="lg" sx={{ marginTop: 0, padding: { xs: 0, sm: 1 } }}>
 
-            {currentPage === 'upload' && (
-              <UploadSection
-                onUploadComplete={handleUploadComplete}
-                awsCredentials={awsCredentials}
-                currentUsage={usageCount}
-                maxFilesAllowed={maxFilesAllowed}
-                maxPagesAllowed={maxPagesAllowed}
-                maxSizeAllowedMB={maxSizeAllowedMB}
-                onUsageRefresh={refreshUsage}
-                setUsageCount={setUsageCount}
-                isFileUploaded={!!uploadedFile}
-                onShowDeploymentPopup={handleShowDeploymentPopup}
-              />
+            <Tabs
+              value={activeTab}
+              onChange={(_, v) => setActiveTab(v)}
+              sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
+            >
+              <Tab label="New Remediation" />
+              <Tab label="My Documents" />
+            </Tabs>
+
+            {activeTab === 0 && (
+              <>
+                {currentPage === 'upload' && (
+                  <UploadSection
+                    onUploadComplete={handleUploadComplete}
+                    awsCredentials={awsCredentials}
+                    currentUsage={usageCount}
+                    maxFilesAllowed={maxFilesAllowed}
+                    maxPagesAllowed={maxPagesAllowed}
+                    maxSizeAllowedMB={maxSizeAllowedMB}
+                    onUsageRefresh={refreshUsage}
+                    setUsageCount={setUsageCount}
+                    isFileUploaded={!!uploadedFile}
+                    onShowDeploymentPopup={handleShowDeploymentPopup}
+                  />
+                )}
+
+                {currentPage === 'processing' && uploadedFile && (
+                  <ProcessingContainer
+                    originalFileName={uploadedFile.name}
+                    updatedFilename={uploadedFile.updatedName}
+                    onFileReady={(downloadUrl) => handleProcessingComplete({ url: downloadUrl })}
+                    awsCredentials={awsCredentials}
+                    selectedFormat={uploadedFile.format}
+                    onNewUpload={handleNewUpload}
+                    jobCreatedAt={uploadedFile.jobCreatedAt}
+                    s3Bucket={uploadedFile.s3Bucket}
+                  />
+                )}
+
+                {currentPage === 'processing' && !uploadedFile && (
+                  <div style={{ padding: '40px', textAlign: 'center' }}>
+                    <p>Loading processing page...</p>
+                  </div>
+                )}
+
+                {currentPage === 'results' && (
+                  <ResultsContainer
+                    fileName={uploadedFile?.name}
+                    processedResult={processedResult}
+                    format={uploadedFile?.format}
+                    processingTime={processedResult?.processingTime}
+                    originalFileName={uploadedFile?.name}
+                    updatedFilename={uploadedFile?.updatedName}
+                    awsCredentials={awsCredentials}
+                    onNewUpload={handleNewUpload}
+                  />
+                )}
+              </>
             )}
 
-            {currentPage === 'processing' && uploadedFile && (
-              <ProcessingContainer
-                originalFileName={uploadedFile.name}
-                updatedFilename={uploadedFile.updatedName}
-                onFileReady={(downloadUrl) => handleProcessingComplete({ url: downloadUrl })}
-                awsCredentials={awsCredentials}
-                selectedFormat={uploadedFile.format}
-                onNewUpload={handleNewUpload}
-              />
-            )}
-
-            {currentPage === 'processing' && !uploadedFile && (
-              <div style={{ padding: '40px', textAlign: 'center' }}>
-                <p>Loading processing page...</p>
-              </div>
-            )}
-
-            {currentPage === 'results' && (
-              <ResultsContainer
-                fileName={uploadedFile?.name}
-                processedResult={processedResult}
-                format={uploadedFile?.format}
-                processingTime={processedResult?.processingTime}
-                originalFileName={uploadedFile?.name}
-                updatedFilename={uploadedFile?.updatedName}
-                awsCredentials={awsCredentials}
-                onNewUpload={handleNewUpload}
-              />
+            {activeTab === 1 && (
+              <JobHistory awsCredentials={awsCredentials} />
             )}
 
 

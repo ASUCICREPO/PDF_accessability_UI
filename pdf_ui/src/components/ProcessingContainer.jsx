@@ -3,7 +3,8 @@ import { S3Client, HeadObjectCommand, GetObjectCommand } from '@aws-sdk/client-s
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import ResultsContainer from './ResultsContainer';
 import './ProcessingContainer.css';
-import { PDFBucket, HTMLBucket, region } from '../utilities/constants';
+import { PDFBucket, HTMLBucket, region, JobHistoryAPI } from '../utilities/constants';
+import { useAuth } from 'react-oidc-context';
 
 const ProcessingContainer = ({
   originalFileName,
@@ -11,13 +12,36 @@ const ProcessingContainer = ({
   onFileReady,
   awsCredentials,
   selectedFormat,
-  onNewUpload
+  onNewUpload,
+  jobCreatedAt,
+  s3Bucket,
 }) => {
+  const auth = useAuth();
   const [downloadUrl, setDownloadUrl] = useState('');
   const [isFileReady, setIsFileReady] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [pollingAttempts, setPollingAttempts] = useState(0);
+
+  const updateJobStatus = useCallback(async (status, resultKey) => {
+    if (!JobHistoryAPI || !jobCreatedAt) return;
+    try {
+      await fetch(JobHistoryAPI, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${auth.user?.id_token}`,
+        },
+        body: JSON.stringify({
+          created_at: jobCreatedAt,
+          status,
+          ...(resultKey && { s3_result_key: resultKey }),
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to update job status:', err);
+    }
+  }, [jobCreatedAt, auth.user?.id_token]);
 
   const processingSteps = [
     { title: "Analyzing Document Structure", description: "Scanning PDF for accessibility issues" },
@@ -173,6 +197,7 @@ const ProcessingContainer = ({
         setIsFileReady(true);
         setCurrentStep(processingSteps.length - 1); // Set to final step
         onFileReady(url);
+        updateJobStatus('complete', objectKey);
 
         // Clear all intervals on success
         clearInterval(intervalId);
@@ -187,6 +212,7 @@ const ProcessingContainer = ({
         // If this is the last attempt, show an error
         if (pollingAttempts + 1 >= MAX_POLLING_ATTEMPTS) {
           console.error('❌ File processing timed out after maximum attempts');
+          updateJobStatus('failed');
         }
       }
     };
@@ -214,7 +240,7 @@ const ProcessingContainer = ({
       clearInterval(timeIntervalId);
       clearInterval(stepIntervalId);
     };
-  }, [updatedFilename, isFileReady, onFileReady, awsCredentials, originalFileName, selectedFormat, generatePresignedUrl, processingSteps.length, pollingAttempts]);
+  }, [updatedFilename, isFileReady, onFileReady, awsCredentials, originalFileName, selectedFormat, generatePresignedUrl, processingSteps.length, pollingAttempts, updateJobStatus]);
 
 
   return (
