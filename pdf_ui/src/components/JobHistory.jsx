@@ -134,7 +134,7 @@ export default function JobHistory({ awsCredentials }) {
                         }}
                       />
                     </TableCell>
-                    <TableCell>{job.page_count || '—'}</TableCell>
+                    <TableCell>{job.page_count != null ? job.page_count : '—'}</TableCell>
                     <TableCell>
                       <Chip label={status.label} color={status.color} size="small" variant="outlined" />
                     </TableCell>

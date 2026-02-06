@@ -53,7 +53,7 @@ function UploadSection({ onUploadComplete, awsCredentials, currentUsage, maxFile
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedFormat, setSelectedFormat] = useState(null);
   const [fileSizeMB, setFileSizeMB] = useState(0);
-  const [pageCount, setPageCount] = useState(0);
+  const pageCountRef = useRef(0);
   const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [openSnackbar, setOpenSnackbar] = useState(false);
@@ -151,7 +151,7 @@ function UploadSection({ onUploadComplete, awsCredentials, currentUsage, maxFile
       }
 
       setSelectedFile(file);
-      setPageCount(numPages);
+      pageCountRef.current = numPages;
       console.log('File object details:', {
         name: file.name,
         size: file.size,
@@ -304,7 +304,7 @@ function UploadSection({ onUploadComplete, awsCredentials, currentUsage, maxFile
               format: selectedFormat || 'pdf',
               s3_bucket: selectedBucket,
               s3_upload_key: `${keyPrefix}${uniqueFilename}`,
-              page_count: pageCount,
+              page_count: pageCountRef.current,
             }),
           });
           if (jobRes.ok) {
