@@ -11,6 +11,7 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
+import * as cr from 'aws-cdk-lib/custom-resources';
 
 export class CdkBackendStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -86,6 +87,49 @@ export class CdkBackendStack extends cdk.Stack {
     const Amazon_Group = 'AmazonUsers';
     const Admin_Group = 'AdminUsers';
     const appUrl = `https://main.${amplifyApp.appId}.amplifyapp.com`;
+
+    // --------- Set CORS on imported S3 buckets via custom resource ----------
+    const corsConfiguration = {
+      CORSRules: [
+        {
+          AllowedHeaders: ['*'],
+          AllowedMethods: ['GET', 'PUT', 'POST', 'HEAD'],
+          AllowedOrigins: [appUrl, 'http://localhost:3000'],
+          ExposeHeaders: ['ETag'],
+          MaxAgeSeconds: 3600,
+        },
+      ],
+    };
+
+    if (pdfBucket) {
+      new cr.AwsCustomResource(this, 'PdfBucketCors', {
+        onCreate: {
+          service: 'S3',
+          action: 'putBucketCors',
+          parameters: {
+            Bucket: pdfBucket.bucketName,
+            CORSConfiguration: corsConfiguration,
+          },
+          physicalResourceId: cr.PhysicalResourceId.of('PdfBucketCorsConfig'),
+        },
+        onUpdate: {
+          service: 'S3',
+          action: 'putBucketCors',
+          parameters: {
+            Bucket: pdfBucket.bucketName,
+            CORSConfiguration: corsConfiguration,
+          },
+          physicalResourceId: cr.PhysicalResourceId.of('PdfBucketCorsConfig'),
+        },
+        policy: cr.AwsCustomResourcePolicy.fromStatements([
+          new iam.PolicyStatement({
+            actions: ['s3:PutBucketCORS'],
+            resources: [pdfBucket.bucketArn],
+          }),
+        ]),
+      });
+      console.log(`CORS configured for PDF bucket: ${pdfBucket.bucketName}`);
+    }
     
     // Create the Lambda role first with necessary permissions
     const postConfirmationLambdaRole = new iam.Role(this, 'PostConfirmationLambdaRole', {
