@@ -121,6 +121,11 @@ else
                 "cognito-idp:GetGroup",
                 "cognito-idp:SetUICustomization",
                 "cognito-idp:SetUserPoolMfaConfig",
+                "cognito-idp:CreateManagedLoginBranding",
+                "cognito-idp:UpdateManagedLoginBranding",
+                "cognito-idp:DeleteManagedLoginBranding",
+                "cognito-idp:DescribeManagedLoginBranding",
+                "cognito-idp:DescribeManagedLoginBrandingByClient",
                 "cognito-idp:TagResource",
                 "cognito-idp:UntagResource",
                 "cognito-idp:ListTagsForResource"
@@ -136,6 +141,7 @@ else
                 "cognito-identity:DescribeIdentityPool",
                 "cognito-identity:UpdateIdentityPool",
                 "cognito-identity:SetIdentityPoolRoles",
+                "cognito-identity:GetIdentityPoolRoles",
                 "cognito-identity:TagResource"
             ],
             "Resource": "arn:aws:cognito-identity:'"$AWS_REGION"':'"$AWS_ACCOUNT_ID"':identitypool/*"
@@ -190,9 +196,19 @@ else
                 "iam:TagRole",
                 "iam:UntagRole",
                 "iam:ListRolePolicies",
-                "iam:ListAttachedRolePolicies"
+                "iam:ListAttachedRolePolicies",
+                "iam:CreatePolicy",
+                "iam:DeletePolicy",
+                "iam:GetPolicy",
+                "iam:GetPolicyVersion",
+                "iam:ListPolicyVersions"
             ],
-            "Resource": "arn:aws:iam::'"$AWS_ACCOUNT_ID"':role/pdf-ui-*"
+            "Resource": [
+                "arn:aws:iam::'"$AWS_ACCOUNT_ID"':role/pdf-ui-*",
+                "arn:aws:iam::'"$AWS_ACCOUNT_ID"':role/CdkBackendStack-*",
+                "arn:aws:iam::'"$AWS_ACCOUNT_ID"':role/cdk-*",
+                "arn:aws:iam::'"$AWS_ACCOUNT_ID"':policy/CdkBackendStack-*"
+            ]
         },
         {
             "Sid": "IAMPassRoleForServices",
@@ -211,17 +227,38 @@ else
             }
         },
         {
-            "Sid": "S3BucketAccess",
+            "Sid": "S3CDKAccess",
             "Effect": "Allow",
             "Action": [
                 "s3:GetObject",
                 "s3:PutObject",
                 "s3:GetBucketLocation",
-                "s3:ListBucket"
+                "s3:ListBucket",
+                "s3:CreateBucket",
+                "s3:GetEncryptionConfiguration",
+                "s3:PutEncryptionConfiguration",
+                "s3:GetBucketVersioning",
+                "s3:PutBucketVersioning",
+                "s3:PutBucketPublicAccessBlock",
+                "s3:GetBucketPublicAccessBlock",
+                "s3:PutBucketPolicy",
+                "s3:GetBucketPolicy",
+                "s3:DeleteBucketPolicy"
             ],
             "Resource": [
                 "arn:aws:s3:::cdk-*",
                 "arn:aws:s3:::cdk-*/*"
+            ]
+        },
+        {
+            "Sid": "S3BucketCorsAccess",
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutBucketCORS",
+                "s3:GetBucketCORS"
+            ],
+            "Resource": [
+                "arn:aws:s3:::*"
             ]
         },
         {
@@ -247,10 +284,13 @@ else
                 "cloudformation:DeleteChangeSet",
                 "cloudformation:DescribeChangeSet",
                 "cloudformation:ExecuteChangeSet",
-                "cloudformation:ListStacks",
-                "cloudformation:GetTemplateSummary"
+                "cloudformation:GetTemplateSummary",
+                "cloudformation:ListStackResources"
             ],
-            "Resource": "arn:aws:cloudformation:'"$AWS_REGION"':'"$AWS_ACCOUNT_ID"':stack/CdkBackendStack/*"
+            "Resource": [
+                "arn:aws:cloudformation:'"$AWS_REGION"':'"$AWS_ACCOUNT_ID"':stack/CdkBackendStack/*",
+                "arn:aws:cloudformation:'"$AWS_REGION"':'"$AWS_ACCOUNT_ID"':stack/CDKToolkit/*"
+            ]
         },
         {
             "Sid": "CloudFormationGlobal",
