@@ -166,11 +166,12 @@ export class CdkBackendStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
     });
 
-    // Grant CloudWatch Logs permissions (scoped after user pool is created below)
+    // Grant CloudWatch Logs permissions
     postConfirmationLambdaRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
     );
-    // NOTE: Cognito permissions are added after the user pool is created (see below)
+    // NOTE: Cognito permissions are attached via CfnPolicy after user pool creation
+    // to scope to exact ARN while avoiding circular dependency (see below)
 
     // Create the Lambda with the role
     const postConfirmationFn = new lambda.Function(this, 'PostConfirmationLambda', {
@@ -225,17 +226,24 @@ export class CdkBackendStack extends cdk.Stack {
       },
     });
 
-    // Scope postConfirmation Lambda's Cognito permissions to this specific user pool
-    postConfirmationLambdaRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'cognito-idp:AdminUpdateUserAttributes',
-          'cognito-idp:AdminAddUserToGroup',
-        ],
-        resources: [userPool.userPoolArn],
-      })
-    );
+    // --------- Scoped Cognito policies via L1 CfnPolicy (avoids circular dependency) ----------
+    // Using CfnPolicy directly so CDK doesn't auto-add it as a Lambda dependency,
+    // which would create a circular dep: Role Policy → UserPool → Lambda → Role
+    new iam.CfnPolicy(this, 'PostConfirmationCognitoPolicy', {
+      policyName: 'PostConfirmationCognitoAccess',
+      policyDocument: {
+        Version: '2012-10-17',
+        Statement: [{
+          Effect: 'Allow',
+          Action: [
+            'cognito-idp:AdminUpdateUserAttributes',
+            'cognito-idp:AdminAddUserToGroup',
+          ],
+          Resource: userPool.userPoolArn,
+        }],
+      },
+      roles: [postConfirmationLambdaRole.roleName],
+    });
     
     // ------------------- Cognito: User Groups -------------------
       const defaultUsersGroup = new cognito.CfnUserPoolGroup(this, 'Default_Group', {
@@ -379,16 +387,8 @@ export class CdkBackendStack extends cdk.Stack {
     checkUploadQuotaLambdaRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
     );
-
-    // Scope Cognito permissions to this specific user pool
-    checkUploadQuotaLambdaRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      resources: [userPool.userPoolArn],
-      actions: [
-        'cognito-idp:AdminGetUser',
-        'cognito-idp:AdminUpdateUserAttributes',
-      ],
-    }));
+    // NOTE: Cognito permissions are attached via CfnPolicy after user pool creation
+    // to scope to exact ARN while avoiding circular dependency (see below)
 
     // 3) Create the Lambda function
     const checkOrIncrementQuotaFn = new lambda.Function(this, 'checkOrIncrementQuotaFn', {
@@ -400,6 +400,23 @@ export class CdkBackendStack extends cdk.Stack {
       environment: {
         USER_POOL_ID: userPool.userPoolId  
       }
+    });
+
+    // Scoped Cognito policy via L1 CfnPolicy (avoids circular dependency)
+    new iam.CfnPolicy(this, 'CheckUploadQuotaCognitoPolicy', {
+      policyName: 'CheckUploadQuotaCognitoAccess',
+      policyDocument: {
+        Version: '2012-10-17',
+        Statement: [{
+          Effect: 'Allow',
+          Action: [
+            'cognito-idp:AdminGetUser',
+            'cognito-idp:AdminUpdateUserAttributes',
+          ],
+          Resource: userPool.userPoolArn,
+        }],
+      },
+      roles: [checkUploadQuotaLambdaRole.roleName],
     });
 
     const updateAttributesApi = new apigateway.RestApi(this, 'UpdateAttributesApi', {
