@@ -296,12 +296,17 @@ else
             "Effect": "Allow",
             "Action": [
                 "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
                 "logs:DeleteLogGroup",
                 "logs:DescribeLogGroups",
                 "logs:PutRetentionPolicy",
                 "logs:TagResource"
             ],
-            "Resource": "arn:aws:logs:'"$AWS_REGION"':'"$AWS_ACCOUNT_ID"':log-group:*"
+            "Resource": [
+                "arn:aws:logs:'"$AWS_REGION"':'"$AWS_ACCOUNT_ID"':log-group:*",
+                "arn:aws:logs:'"$AWS_REGION"':'"$AWS_ACCOUNT_ID"':log-group:*:*"
+            ]
         },
         {
             "Sid": "STSAccess",

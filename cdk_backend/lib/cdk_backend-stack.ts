@@ -130,6 +130,36 @@ export class CdkBackendStack extends cdk.Stack {
       });
       console.log(`CORS configured for PDF bucket: ${pdfBucket.bucketName}`);
     }
+
+    if (htmlBucket) {
+      new cr.AwsCustomResource(this, 'HtmlBucketCors', {
+        onCreate: {
+          service: 'S3',
+          action: 'putBucketCors',
+          parameters: {
+            Bucket: htmlBucket.bucketName,
+            CORSConfiguration: corsConfiguration,
+          },
+          physicalResourceId: cr.PhysicalResourceId.of('HtmlBucketCorsConfig'),
+        },
+        onUpdate: {
+          service: 'S3',
+          action: 'putBucketCors',
+          parameters: {
+            Bucket: htmlBucket.bucketName,
+            CORSConfiguration: corsConfiguration,
+          },
+          physicalResourceId: cr.PhysicalResourceId.of('HtmlBucketCorsConfig'),
+        },
+        policy: cr.AwsCustomResourcePolicy.fromStatements([
+          new iam.PolicyStatement({
+            actions: ['s3:PutBucketCORS'],
+            resources: [htmlBucket.bucketArn],
+          }),
+        ]),
+      });
+      console.log(`CORS configured for HTML bucket: ${htmlBucket.bucketName}`);
+    }
     
     // Create the Lambda role first with necessary permissions
     const postConfirmationLambdaRole = new iam.Role(this, 'PostConfirmationLambdaRole', {
