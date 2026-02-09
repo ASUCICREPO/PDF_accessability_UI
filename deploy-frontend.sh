@@ -168,7 +168,7 @@ FRONTEND_SOURCE='{
 }'
 
 ARTIFACTS='{"type":"NO_ARTIFACTS"}'
-SOURCE_VERSION="main"
+SOURCE_VERSION="security"
 
 echo "Creating Frontend CodeBuild project '$FRONTEND_PROJECT_NAME'..."
 aws codebuild create-project \
