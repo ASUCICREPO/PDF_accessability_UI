@@ -92,19 +92,11 @@ export class CdkBackendStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
     });
 
-    postConfirmationLambdaRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'cognito-idp:AdminUpdateUserAttributes',
-          'cognito-idp:AdminAddUserToGroup',
-          'logs:CreateLogGroup',
-          'logs:CreateLogStream',
-          'logs:PutLogEvents'
-        ],
-        resources: ['*']  // You can restrict this further if needed
-      })
+    // Grant CloudWatch Logs permissions (scoped after user pool is created below)
+    postConfirmationLambdaRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
     );
+    // NOTE: Cognito permissions are added after the user pool is created (see below)
 
     // Create the Lambda with the role
     const postConfirmationFn = new lambda.Function(this, 'PostConfirmationLambda', {
@@ -158,6 +150,18 @@ export class CdkBackendStack extends cdk.Stack {
         postConfirmation: postConfirmationFn,
       },
     });
+
+    // Scope postConfirmation Lambda's Cognito permissions to this specific user pool
+    postConfirmationLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'cognito-idp:AdminUpdateUserAttributes',
+          'cognito-idp:AdminAddUserToGroup',
+        ],
+        resources: [userPool.userPoolArn],
+      })
+    );
     
     // ------------------- Cognito: User Groups -------------------
       const defaultUsersGroup = new cognito.CfnUserPoolGroup(this, 'Default_Group', {
@@ -297,15 +301,18 @@ export class CdkBackendStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
     });
 
-    // 2) Attach necessary policies
+    // Grant CloudWatch Logs via managed policy
+    checkUploadQuotaLambdaRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
+    );
+
+    // Scope Cognito permissions to this specific user pool
     checkUploadQuotaLambdaRole.addToPolicy(new iam.PolicyStatement({
-      resources: ['*'],
+      effect: iam.Effect.ALLOW,
+      resources: [userPool.userPoolArn],
       actions: [
         'cognito-idp:AdminGetUser',
         'cognito-idp:AdminUpdateUserAttributes',
-        'logs:CreateLogGroup',
-        'logs:CreateLogStream',
-        'logs:PutLogEvents'
       ],
     }));
 
@@ -412,6 +419,9 @@ export class CdkBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset('lambda/UpdateAttributesGroups/'), // Ensure this path is correct
       timeout: cdk.Duration.seconds(900),
       role: updateAttributesGroupsLambdaRole,
+      environment: {
+        USER_POOL_ID: userPool.userPoolId,
+      },
     });
 
 

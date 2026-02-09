@@ -1,4 +1,5 @@
 import json
+import os
 import boto3
 import time
 from botocore.exceptions import ClientError
@@ -6,9 +7,9 @@ from botocore.exceptions import ClientError
 # Initialize Cognito Identity Provider client
 cognito_client = boto3.client('cognito-idp')
 
-# ======== Hardcoded Configuration ========
+# ======== Configuration from Environment ========
 ###########################################
-USER_POOL_ID = ''  # Replace with your Cognito User Pool ID
+USER_POOL_ID = os.environ.get('USER_POOL_ID', '')  # Set via CDK environment variable
 
 # For manual invocation only
 GROUP_NAME = 'AdminUsers'  # Example group name for manual usage
@@ -61,6 +62,11 @@ def handler(event, context):
         - Applies the custom attribute limits based on highest-precedence group
     """
     try:
+        # Validate USER_POOL_ID is configured
+        if not USER_POOL_ID:
+            print("[ERROR] USER_POOL_ID environment variable is not set.")
+            return format_response(500, "Server configuration error: USER_POOL_ID not set.")
+
         # 1) Check if this is likely an EventBridge (CloudTrail) invocation
         if is_eventbridge_invocation(event):
             print("[INFO] EventBridge invocation detected.")
