@@ -1,4 +1,5 @@
 import json
+import os
 import boto3
 import time
 from botocore.exceptions import ClientError
@@ -6,9 +7,9 @@ from botocore.exceptions import ClientError
 # Initialize Cognito Identity Provider client
 cognito_client = boto3.client('cognito-idp')
 
-# ======== Hardcoded Configuration ========
+# ======== Configuration from Environment ========
 ###########################################
-USER_POOL_ID = ''  # Replace with your Cognito User Pool ID
+USER_POOL_ID = os.environ.get('USER_POOL_ID', '')  # Set via CDK environment variable
 
 # For manual invocation only
 GROUP_NAME = 'AdminUsers'  # Example group name for manual usage
@@ -20,22 +21,22 @@ GROUP_LIMITS = {
     'DefaultUsers': {
         # 'custom:first_sign_in': 'true',
         # 'custom:total_files_uploaded': '0',  # optionally reset
-        'custom:max_files_allowed': '3',
+        'custom:max_files_allowed': '8',
         'custom:max_pages_allowed': '10',
         'custom:max_size_allowed_MB': '25'
     },
     'AmazonUsers': {
         # 'custom:first_sign_in': 'true',
         # 'custom:total_files_uploaded': '0',  # optionally reset
-        'custom:max_files_allowed': '5',
+        'custom:max_files_allowed': '15',
         'custom:max_pages_allowed': '10',
         'custom:max_size_allowed_MB': '25'
     },
     'AdminUsers': {
         # 'custom:first_sign_in': 'true',
         # 'custom:total_files_uploaded': '0',  # optionally reset
-        'custom:max_files_allowed': '500',
-        'custom:max_pages_allowed': '1500',
+        'custom:max_files_allowed': '100',
+        'custom:max_pages_allowed': '2500',
         'custom:max_size_allowed_MB': '1000'
     }
 }
@@ -61,6 +62,11 @@ def handler(event, context):
         - Applies the custom attribute limits based on highest-precedence group
     """
     try:
+        # Validate USER_POOL_ID is configured
+        if not USER_POOL_ID:
+            print("[ERROR] USER_POOL_ID environment variable is not set.")
+            return format_response(500, "Server configuration error: USER_POOL_ID not set.")
+
         # 1) Check if this is likely an EventBridge (CloudTrail) invocation
         if is_eventbridge_invocation(event):
             print("[INFO] EventBridge invocation detected.")

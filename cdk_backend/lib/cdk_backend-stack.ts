@@ -11,6 +11,7 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
+import * as cr from 'aws-cdk-lib/custom-resources';
 
 export class CdkBackendStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -86,25 +87,91 @@ export class CdkBackendStack extends cdk.Stack {
     const Amazon_Group = 'AmazonUsers';
     const Admin_Group = 'AdminUsers';
     const appUrl = `https://main.${amplifyApp.appId}.amplifyapp.com`;
+
+    // --------- Set CORS on imported S3 buckets via custom resource ----------
+    const corsConfiguration = {
+      CORSRules: [
+        {
+          AllowedHeaders: ['*'],
+          AllowedMethods: ['GET', 'PUT', 'POST', 'HEAD'],
+          AllowedOrigins: [appUrl, 'http://localhost:3000'],
+          ExposeHeaders: ['ETag'],
+          MaxAgeSeconds: 3600,
+        },
+      ],
+    };
+
+    if (pdfBucket) {
+      new cr.AwsCustomResource(this, 'PdfBucketCors', {
+        onCreate: {
+          service: 'S3',
+          action: 'putBucketCors',
+          parameters: {
+            Bucket: pdfBucket.bucketName,
+            CORSConfiguration: corsConfiguration,
+          },
+          physicalResourceId: cr.PhysicalResourceId.of('PdfBucketCorsConfig'),
+        },
+        onUpdate: {
+          service: 'S3',
+          action: 'putBucketCors',
+          parameters: {
+            Bucket: pdfBucket.bucketName,
+            CORSConfiguration: corsConfiguration,
+          },
+          physicalResourceId: cr.PhysicalResourceId.of('PdfBucketCorsConfig'),
+        },
+        policy: cr.AwsCustomResourcePolicy.fromStatements([
+          new iam.PolicyStatement({
+            actions: ['s3:PutBucketCORS'],
+            resources: [pdfBucket.bucketArn],
+          }),
+        ]),
+      });
+      console.log(`CORS configured for PDF bucket: ${pdfBucket.bucketName}`);
+    }
+
+    if (htmlBucket) {
+      new cr.AwsCustomResource(this, 'HtmlBucketCors', {
+        onCreate: {
+          service: 'S3',
+          action: 'putBucketCors',
+          parameters: {
+            Bucket: htmlBucket.bucketName,
+            CORSConfiguration: corsConfiguration,
+          },
+          physicalResourceId: cr.PhysicalResourceId.of('HtmlBucketCorsConfig'),
+        },
+        onUpdate: {
+          service: 'S3',
+          action: 'putBucketCors',
+          parameters: {
+            Bucket: htmlBucket.bucketName,
+            CORSConfiguration: corsConfiguration,
+          },
+          physicalResourceId: cr.PhysicalResourceId.of('HtmlBucketCorsConfig'),
+        },
+        policy: cr.AwsCustomResourcePolicy.fromStatements([
+          new iam.PolicyStatement({
+            actions: ['s3:PutBucketCORS'],
+            resources: [htmlBucket.bucketArn],
+          }),
+        ]),
+      });
+      console.log(`CORS configured for HTML bucket: ${htmlBucket.bucketName}`);
+    }
     
     // Create the Lambda role first with necessary permissions
     const postConfirmationLambdaRole = new iam.Role(this, 'PostConfirmationLambdaRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
     });
 
-    postConfirmationLambdaRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'cognito-idp:AdminUpdateUserAttributes',
-          'cognito-idp:AdminAddUserToGroup',
-          'logs:CreateLogGroup',
-          'logs:CreateLogStream',
-          'logs:PutLogEvents'
-        ],
-        resources: ['*']  // You can restrict this further if needed
-      })
+    // Grant CloudWatch Logs permissions
+    postConfirmationLambdaRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
     );
+    // NOTE: Cognito permissions are attached via CfnPolicy after user pool creation
+    // to scope to exact ARN while avoiding circular dependency (see below)
 
     // Create the Lambda with the role
     const postConfirmationFn = new lambda.Function(this, 'PostConfirmationLambda', {
@@ -157,6 +224,25 @@ export class CdkBackendStack extends cdk.Stack {
       lambdaTriggers: {
         postConfirmation: postConfirmationFn,
       },
+    });
+
+    // --------- Scoped Cognito policies via L1 CfnPolicy (avoids circular dependency) ----------
+    // Using CfnPolicy directly so CDK doesn't auto-add it as a Lambda dependency,
+    // which would create a circular dep: Role Policy → UserPool → Lambda → Role
+    new iam.CfnPolicy(this, 'PostConfirmationCognitoPolicy', {
+      policyName: 'PostConfirmationCognitoAccess',
+      policyDocument: {
+        Version: '2012-10-17',
+        Statement: [{
+          Effect: 'Allow',
+          Action: [
+            'cognito-idp:AdminUpdateUserAttributes',
+            'cognito-idp:AdminAddUserToGroup',
+          ],
+          Resource: userPool.userPoolArn,
+        }],
+      },
+      roles: [postConfirmationLambdaRole.roleName],
     });
     
     // ------------------- Cognito: User Groups -------------------
@@ -297,17 +383,12 @@ export class CdkBackendStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
     });
 
-    // 2) Attach necessary policies
-    checkUploadQuotaLambdaRole.addToPolicy(new iam.PolicyStatement({
-      resources: ['*'],
-      actions: [
-        'cognito-idp:AdminGetUser',
-        'cognito-idp:AdminUpdateUserAttributes',
-        'logs:CreateLogGroup',
-        'logs:CreateLogStream',
-        'logs:PutLogEvents'
-      ],
-    }));
+    // Grant CloudWatch Logs via managed policy
+    checkUploadQuotaLambdaRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
+    );
+    // NOTE: Cognito permissions are attached via CfnPolicy after user pool creation
+    // to scope to exact ARN while avoiding circular dependency (see below)
 
     // 3) Create the Lambda function
     const checkOrIncrementQuotaFn = new lambda.Function(this, 'checkOrIncrementQuotaFn', {
@@ -319,6 +400,23 @@ export class CdkBackendStack extends cdk.Stack {
       environment: {
         USER_POOL_ID: userPool.userPoolId  
       }
+    });
+
+    // Scoped Cognito policy via L1 CfnPolicy (avoids circular dependency)
+    new iam.CfnPolicy(this, 'CheckUploadQuotaCognitoPolicy', {
+      policyName: 'CheckUploadQuotaCognitoAccess',
+      policyDocument: {
+        Version: '2012-10-17',
+        Statement: [{
+          Effect: 'Allow',
+          Action: [
+            'cognito-idp:AdminGetUser',
+            'cognito-idp:AdminUpdateUserAttributes',
+          ],
+          Resource: userPool.userPoolArn,
+        }],
+      },
+      roles: [checkUploadQuotaLambdaRole.roleName],
     });
 
     const updateAttributesApi = new apigateway.RestApi(this, 'UpdateAttributesApi', {
@@ -412,6 +510,9 @@ export class CdkBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset('lambda/UpdateAttributesGroups/'), // Ensure this path is correct
       timeout: cdk.Duration.seconds(900),
       role: updateAttributesGroupsLambdaRole,
+      environment: {
+        USER_POOL_ID: userPool.userPoolId,
+      },
     });
 
 
