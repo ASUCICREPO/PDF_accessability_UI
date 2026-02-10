@@ -437,7 +437,7 @@ BACKEND_SOURCE='{
 }'
 
 ARTIFACTS='{"type":"NO_ARTIFACTS"}'
-SOURCE_VERSION="security"
+SOURCE_VERSION="main"
 
 echo "Creating Backend CodeBuild project '$BACKEND_PROJECT_NAME'..."
 aws codebuild create-project \
