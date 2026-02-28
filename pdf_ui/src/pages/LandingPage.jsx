@@ -202,7 +202,7 @@ const LandingPage = () => {
           <Typography variant="body1" component="h3" paragraph>
             To test out this open‐source solution,{' '}
             <Box component="span" sx={{ color: '#FFC627', fontWeight: 'bold' }}>
-              click the button to the right
+              click "Log In and Remediate My PDF"
             </Box>{' '}
             to briefly create an account, upload your document, and receive your
             remediated PDF in return.
@@ -296,7 +296,7 @@ const LandingPage = () => {
                 },
               }}
             >
-              Login and Remediate My PDF
+              Log In and Remediate My PDF
             </LoadingButton>
           </GradientBox>
 
