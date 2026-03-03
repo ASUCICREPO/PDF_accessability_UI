@@ -80,6 +80,28 @@ echo "  - AWS Region: $AWS_REGION"
 echo ""
 
 # --------------------------------------------------
+# Configure S3 CORS for Browser Uploads
+# --------------------------------------------------
+
+echo "🔧 Configuring S3 CORS for browser uploads..."
+
+CORS_CONFIG='{"CORSRules":[{"AllowedHeaders":["*"],"AllowedMethods":["GET","HEAD","PUT","POST","DELETE"],"AllowedOrigins":["*"],"ExposeHeaders":["ETag","x-amz-request-id"]}]}'
+
+if [ -n "${PDF_TO_PDF_BUCKET:-}" ]; then
+  aws s3api put-bucket-cors --bucket "$PDF_TO_PDF_BUCKET" --cors-configuration "$CORS_CONFIG" --no-cli-pager 2>/dev/null && \
+    echo "  ✅ CORS configured for PDF-to-PDF bucket" || \
+    echo "  ⚠️  Failed to set CORS on PDF-to-PDF bucket (may need manual configuration)"
+fi
+
+if [ -n "${PDF_TO_HTML_BUCKET:-}" ]; then
+  aws s3api put-bucket-cors --bucket "$PDF_TO_HTML_BUCKET" --cors-configuration "$CORS_CONFIG" --no-cli-pager 2>/dev/null && \
+    echo "  ✅ CORS configured for PDF-to-HTML bucket" || \
+    echo "  ⚠️  Failed to set CORS on PDF-to-HTML bucket (may need manual configuration)"
+fi
+
+echo ""
+
+# --------------------------------------------------
 # Create .env.production File
 # --------------------------------------------------
 

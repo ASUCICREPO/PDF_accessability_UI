@@ -106,8 +106,26 @@ echo ""
 cd ..
 
 # --------------------------------------------------
-# Retrieve CDK Outputs
+# Configure S3 CORS for Browser Uploads
 # --------------------------------------------------
+
+echo "🔧 Configuring S3 CORS for browser uploads..."
+
+CORS_CONFIG='{"CORSRules":[{"AllowedHeaders":["*"],"AllowedMethods":["GET","HEAD","PUT","POST","DELETE"],"AllowedOrigins":["*"],"ExposeHeaders":["ETag","x-amz-request-id"]}]}'
+
+if [ -n "$PDF_TO_PDF_BUCKET" ]; then
+  aws s3api put-bucket-cors --bucket "$PDF_TO_PDF_BUCKET" --cors-configuration "$CORS_CONFIG" --no-cli-pager && \
+    echo "  ✅ CORS configured for PDF-to-PDF bucket" || \
+    echo "  ⚠️  Failed to set CORS on PDF-to-PDF bucket"
+fi
+
+if [ -n "$PDF_TO_HTML_BUCKET" ]; then
+  aws s3api put-bucket-cors --bucket "$PDF_TO_HTML_BUCKET" --cors-configuration "$CORS_CONFIG" --no-cli-pager && \
+    echo "  ✅ CORS configured for PDF-to-HTML bucket" || \
+    echo "  ⚠️  Failed to set CORS on PDF-to-HTML bucket"
+fi
+
+echo ""
 
 echo "🔍 Retrieving backend configuration..."
 
