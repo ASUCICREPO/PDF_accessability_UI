@@ -2,17 +2,108 @@
 set -euo pipefail
 
 # --------------------------------------------------
-# Direct Amplify Deployment Script
-# Builds locally and deploys directly to Amplify
-# Usage: ./deploy-amplify-direct.sh
+# Full Stack Local Deployment Script
+# Deploys both CDK backend and React frontend locally
+# Usage: ./deploy-full-stack-local.sh [PDF_BUCKET] [HTML_BUCKET]
 # --------------------------------------------------
 
-echo "🚀 Starting Direct Amplify Deployment..."
+echo "🚀 Starting Full Stack Local Deployment..."
 echo "📋 This script will:"
-echo "  1. Retrieve backend configuration from CloudFormation"
-echo "  2. Build the React app locally"
-echo "  3. Deploy directly to Amplify"
+echo "  1. Deploy CDK backend infrastructure"
+echo "  2. Build and deploy React frontend to Amplify"
 echo ""
+
+# Parse optional arguments
+PDF_TO_PDF_BUCKET="${1:-}"
+PDF_TO_HTML_BUCKET="${2:-}"
+
+# --------------------------------------------------
+# Validate Prerequisites
+# --------------------------------------------------
+
+echo "🔍 Validating prerequisites..."
+
+# Check for required tools
+command -v node >/dev/null 2>&1 || { echo "❌ node is required but not installed"; exit 1; }
+command -v npm >/dev/null 2>&1 || { echo "❌ npm is required but not installed"; exit 1; }
+command -v aws >/dev/null 2>&1 || { echo "❌ AWS CLI is required but not installed"; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "❌ jq is required but not installed"; exit 1; }
+
+# Check AWS credentials
+aws sts get-caller-identity --no-cli-pager >/dev/null 2>&1 || { echo "❌ AWS credentials not configured"; exit 1; }
+
+echo "✅ Prerequisites validated"
+echo ""
+
+# --------------------------------------------------
+# Prompt for Bucket Names
+# --------------------------------------------------
+
+if [ -z "$PDF_TO_PDF_BUCKET" ]; then
+  read -rp "Enter PDF-to-PDF bucket name (leave empty if not using): " PDF_TO_PDF_BUCKET
+fi
+
+if [ -z "$PDF_TO_HTML_BUCKET" ]; then
+  read -rp "Enter PDF-to-HTML bucket name (leave empty if not using): " PDF_TO_HTML_BUCKET
+fi
+
+# Validate at least one bucket
+if [ -z "$PDF_TO_PDF_BUCKET" ] && [ -z "$PDF_TO_HTML_BUCKET" ]; then
+  echo "❌ Error: At least one bucket name is required"
+  exit 1
+fi
+
+echo ""
+echo "📦 Configuration:"
+echo "  - PDF-to-PDF Bucket: ${PDF_TO_PDF_BUCKET:-Not specified}"
+echo "  - PDF-to-HTML Bucket: ${PDF_TO_HTML_BUCKET:-Not specified}"
+echo ""
+
+# --------------------------------------------------
+# Deploy CDK Backend
+# --------------------------------------------------
+
+echo "🏗️  Deploying CDK Backend..."
+echo ""
+
+cd cdk_backend
+
+# Install dependencies
+if [ ! -d "node_modules" ]; then
+  echo "📦 Installing CDK dependencies..."
+  npm install
+fi
+
+# Build TypeScript
+echo "🔨 Building CDK stack..."
+npm run build
+
+# Bootstrap CDK (if needed)
+echo "🔧 Ensuring CDK is bootstrapped..."
+npx cdk bootstrap --no-cli-pager 2>/dev/null || true
+
+# Build CDK context arguments
+CDK_CONTEXT_ARGS=""
+if [ -n "$PDF_TO_PDF_BUCKET" ]; then
+  CDK_CONTEXT_ARGS="$CDK_CONTEXT_ARGS -c PDF_TO_PDF_BUCKET=$PDF_TO_PDF_BUCKET"
+fi
+if [ -n "$PDF_TO_HTML_BUCKET" ]; then
+  CDK_CONTEXT_ARGS="$CDK_CONTEXT_ARGS -c PDF_TO_HTML_BUCKET=$PDF_TO_HTML_BUCKET"
+fi
+
+# Deploy CDK stack
+echo "🚀 Deploying CDK stack..."
+npx cdk deploy --require-approval never --no-cli-pager $CDK_CONTEXT_ARGS
+
+if [ $? -ne 0 ]; then
+  echo "❌ CDK deployment failed"
+  exit 1
+fi
+
+echo "✅ CDK backend deployed successfully"
+echo ""
+
+cd ..
 
 # --------------------------------------------------
 # Retrieve CDK Outputs
@@ -33,7 +124,6 @@ get_output() {
 }
 
 # Get all required outputs
-echo "Fetching CloudFormation outputs..."
 AMPLIFY_APP_ID=$(get_output "AmplifyAppId")
 REACT_APP_AMPLIFY_APP_URL=$(get_output "AmplifyAppURL")
 REACT_APP_USER_POOL_ID=$(get_output "UserPoolId")
@@ -45,154 +135,87 @@ REACT_APP_CHECK_UPLOAD_QUOTA_ENDPOINT=$(get_output "CheckUploadQuotaEndpoint")
 REACT_APP_JOB_HISTORY_ENDPOINT=$(get_output "JobHistoryEndpoint")
 REACT_APP_UPDATE_ATTRIBUTES_API_ENDPOINT=$(get_output "UpdateAttributesApiEndpoint377B5108")
 
-# Get bucket names from stack resources
-PDF_TO_PDF_BUCKET=$(aws cloudformation describe-stack-resources \
-  --stack-name "$STACK_NAME" \
-  --query "StackResources[?ResourceType=='AWS::S3::Bucket' && contains(PhysicalResourceId, 'pdfaccessibility')].PhysicalResourceId" \
-  --output text \
-  --no-cli-pager 2>/dev/null | head -n1 || echo "")
-
-PDF_TO_HTML_BUCKET=$(aws cloudformation describe-stack-resources \
-  --stack-name "$STACK_NAME" \
-  --query "StackResources[?ResourceType=='AWS::S3::Bucket' && contains(PhysicalResourceId, 'pdf2html')].PhysicalResourceId" \
-  --output text \
-  --no-cli-pager 2>/dev/null | head -n1 || echo "")
-
-# Get AWS region
-AWS_REGION=$(aws configure get region || echo "us-east-1")
+AWS_REGION=us-east-1
 
 # Validate required outputs
 if [ -z "$AMPLIFY_APP_ID" ] || [ "$AMPLIFY_APP_ID" = "None" ]; then
-  echo "❌ Error: Could not find AmplifyAppId in stack outputs"
-  echo "Make sure the backend stack '$STACK_NAME' is deployed"
+  echo "❌ Error: Could not retrieve AmplifyAppId from stack outputs"
   exit 1
 fi
 
+AMPLIFY_APP_ID=$(echo "$AMPLIFY_APP_ID" | tr -d '[:space:]')
+
 echo "✅ Retrieved configuration:"
 echo "  - Amplify App ID: $AMPLIFY_APP_ID"
-echo "  - Amplify URL: $REACT_APP_AMPLIFY_APP_URL"
 echo "  - User Pool ID: $REACT_APP_USER_POOL_ID"
-echo "  - User Pool Client ID: $REACT_APP_USER_POOL_CLIENT_ID"
-echo "  - Identity Pool ID: $REACT_APP_IDENTITY_POOL_ID"
-echo "  - PDF-to-PDF Bucket: ${PDF_TO_PDF_BUCKET:-Not found}"
-echo "  - PDF-to-HTML Bucket: ${PDF_TO_HTML_BUCKET:-Not found}"
-echo "  - AWS Region: $AWS_REGION"
 echo ""
 
 # --------------------------------------------------
-# Create .env.production File
+# Deploy Frontend
 # --------------------------------------------------
 
-echo "📝 Creating .env.production file..."
+echo "🎨 Deploying Frontend..."
+echo ""
 
 cd pdf_ui
 
+# Create .env.production
+echo "📝 Creating .env.production..."
+
 cat > .env.production << EOF
-# Auto-generated by deploy-amplify-direct.sh
+# Auto-generated by deploy-full-stack-local.sh
 # Generated: $(date)
 
-# AWS Configuration
 REACT_APP_AWS_REGION=$AWS_REGION
 REACT_APP_BUCKET_REGION=$AWS_REGION
-
-# Cognito Configuration
 REACT_APP_USER_POOL_ID=$REACT_APP_USER_POOL_ID
 REACT_APP_USER_POOL_CLIENT_ID=$REACT_APP_USER_POOL_CLIENT_ID
 REACT_APP_IDENTITY_POOL_ID=$REACT_APP_IDENTITY_POOL_ID
 REACT_APP_USER_POOL_DOMAIN=$REACT_APP_USER_POOL_DOMAIN
-
-# Amplify Configuration
 REACT_APP_HOSTED_UI_URL=$REACT_APP_AMPLIFY_APP_URL
-REACT_APP_AUTHORITY=$REACT_APP_USER_POOL_DOMAIN
-
-# S3 Buckets
+REACT_APP_AUTHORITY=cognito-idp.$AWS_REGION.amazonaws.com/$REACT_APP_USER_POOL_ID
 REACT_APP_PDF_BUCKET_NAME=${PDF_TO_PDF_BUCKET:-}
 REACT_APP_HTML_BUCKET_NAME=${PDF_TO_HTML_BUCKET:-}
-
-# API Endpoints
 REACT_APP_UPDATE_FIRST_SIGN_IN=$REACT_APP_UPDATE_FIRST_SIGN_IN_ENDPOINT
 REACT_APP_UPLOAD_QUOTA_API=$REACT_APP_CHECK_UPLOAD_QUOTA_ENDPOINT
 REACT_APP_JOB_HISTORY_API=$REACT_APP_JOB_HISTORY_ENDPOINT
 REACT_APP_UPDATE_ATTRIBUTES_API=$REACT_APP_UPDATE_ATTRIBUTES_API_ENDPOINT
-
-# Domain Configuration
 REACT_APP_DOMAIN_PREFIX=$(echo $REACT_APP_USER_POOL_DOMAIN | cut -d'.' -f1)
 EOF
 
-echo "✅ Created .env.production"
-echo ""
-
-# --------------------------------------------------
-# Install Dependencies
-# --------------------------------------------------
-
-echo "📦 Installing dependencies..."
+# Install dependencies
 if [ ! -d "node_modules" ]; then
+  echo "📦 Installing frontend dependencies..."
   npm install
-else
-  echo "✅ Dependencies already installed"
 fi
-echo ""
 
-# --------------------------------------------------
-# Build React App
-# --------------------------------------------------
-
+# Build React app
 echo "🔨 Building React application..."
 npm run build
 
 if [ $? -ne 0 ]; then
-  echo "❌ Build failed"
+  echo "❌ Frontend build failed"
   exit 1
 fi
 
-echo "✅ Build completed successfully"
-echo ""
-
-# --------------------------------------------------
-# Create Deployment Package
-# --------------------------------------------------
-
+# Create deployment package
 echo "📦 Creating deployment package..."
-
 cd build
 zip -r ../deployment.zip . > /dev/null 2>&1
-
-if [ $? -ne 0 ]; then
-  echo "❌ Failed to create deployment package"
-  exit 1
-fi
-
 cd ..
-echo "✅ Created deployment.zip"
-echo ""
 
-# --------------------------------------------------
 # Deploy to Amplify
-# --------------------------------------------------
-
 echo "🚀 Deploying to Amplify..."
 
-# Create deployment
-echo "Creating Amplify deployment..."
 DEPLOYMENT_RESPONSE=$(aws amplify create-deployment \
   --app-id "$AMPLIFY_APP_ID" \
   --branch-name main \
   --output json \
   --no-cli-pager)
 
-if [ $? -ne 0 ]; then
-  echo "❌ Failed to create Amplify deployment"
-  exit 1
-fi
-
-# Extract upload URL and job ID
 UPLOAD_URL=$(echo "$DEPLOYMENT_RESPONSE" | jq -r '.zipUploadUrl')
 JOB_ID=$(echo "$DEPLOYMENT_RESPONSE" | jq -r '.jobId')
 
-echo "✅ Deployment created (Job ID: $JOB_ID)"
-
-# Upload the deployment package
 echo "Uploading build artifacts..."
 curl -X PUT \
   -H "Content-Type: application/zip" \
@@ -201,15 +224,6 @@ curl -X PUT \
   --silent \
   --show-error
 
-if [ $? -ne 0 ]; then
-  echo "❌ Failed to upload deployment package"
-  exit 1
-fi
-
-echo "✅ Upload completed"
-
-# Start the deployment
-echo "Starting Amplify deployment..."
 aws amplify start-deployment \
   --app-id "$AMPLIFY_APP_ID" \
   --branch-name main \
@@ -217,25 +231,13 @@ aws amplify start-deployment \
   --source-url "$UPLOAD_URL" \
   --no-cli-pager > /dev/null
 
-if [ $? -ne 0 ]; then
-  echo "❌ Failed to start deployment"
-  exit 1
-fi
+echo "✅ Deployment started (Job ID: $JOB_ID)"
 
-echo "✅ Deployment started"
-echo ""
-
-# --------------------------------------------------
-# Monitor Deployment Status
-# --------------------------------------------------
-
-echo "⏳ Monitoring deployment status..."
-echo "This may take a few minutes..."
-echo ""
-
+# Monitor deployment
+echo "⏳ Monitoring deployment..."
 DEPLOYMENT_STATUS="PENDING"
 RETRY_COUNT=0
-MAX_RETRIES=60  # 5 minutes with 5-second intervals
+MAX_RETRIES=60
 
 while [ "$DEPLOYMENT_STATUS" != "SUCCEED" ] && [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
   sleep 5
@@ -255,7 +257,6 @@ while [ "$DEPLOYMENT_STATUS" != "SUCCEED" ] && [ $RETRY_COUNT -lt $MAX_RETRIES ]
       ;;
     "FAILED"|"CANCELLED")
       echo "❌ Deployment $DEPLOYMENT_STATUS"
-      echo "Check Amplify console for details: https://console.aws.amazon.com/amplify/home?region=$AWS_REGION#/$AMPLIFY_APP_ID"
       exit 1
       ;;
     *)
@@ -266,40 +267,33 @@ while [ "$DEPLOYMENT_STATUS" != "SUCCEED" ] && [ $RETRY_COUNT -lt $MAX_RETRIES ]
   RETRY_COUNT=$((RETRY_COUNT + 1))
 done
 
-if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-  echo "⚠️  Deployment is taking longer than expected"
-  echo "Check status in Amplify console: https://console.aws.amazon.com/amplify/home?region=$AWS_REGION#/$AMPLIFY_APP_ID"
-fi
-
-# --------------------------------------------------
 # Cleanup
-# --------------------------------------------------
-
-echo ""
-echo "🧹 Cleaning up..."
 rm -f deployment.zip
-echo "✅ Cleanup completed"
+
+cd ..
 
 # --------------------------------------------------
 # Final Summary
 # --------------------------------------------------
 
 echo ""
-echo "🎉 Deployment Complete!"
+echo "🎉 Full Stack Deployment Complete!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📊 Summary:"
-echo "  - Amplify App ID: $AMPLIFY_APP_ID"
-echo "  - Deployment URL: $REACT_APP_AMPLIFY_APP_URL"
-echo "  - Job ID: $JOB_ID"
-echo "  - Branch: main"
-echo "  - Status: $DEPLOYMENT_STATUS"
+echo "📊 Backend:"
+echo "  - Stack: $STACK_NAME"
+echo "  - User Pool: $REACT_APP_USER_POOL_ID"
+echo "  - Identity Pool: $REACT_APP_IDENTITY_POOL_ID"
 echo ""
-echo "🌐 Your application should be live at:"
+echo "📊 Frontend:"
+echo "  - Amplify App: $AMPLIFY_APP_ID"
+echo "  - URL: $REACT_APP_AMPLIFY_APP_URL"
+echo "  - Job ID: $JOB_ID"
+echo ""
+echo "🌐 Your application is live at:"
 echo "   $REACT_APP_AMPLIFY_APP_URL"
 echo ""
-echo "📱 View deployment details:"
-echo "   https://console.aws.amazon.com/amplify/home?region=$AWS_REGION#/$AMPLIFY_APP_ID"
+echo "💡 Next deployment:"
+echo "   ./deploy-full-stack-local.sh [PDF_BUCKET] [HTML_BUCKET]"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-cd ..
 exit 0
