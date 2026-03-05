@@ -8,6 +8,7 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
@@ -82,7 +83,7 @@ export class CdkBackendStack extends cdk.Stack {
       status: amplify.RedirectStatus.REWRITE
     }));
 
-    const domainPrefix = `pdf-ui-auth${Math.random().toString(36).substring(2, 8)}`; // must be globally unique in that region
+    const domainPrefix = this.node.tryGetContext('COGNITO_DOMAIN_PREFIX') || `pdf-ui-auth${this.node.addr.substring(0, 6)}`;
     const Default_Group = 'DefaultUsers';
     const Amazon_Group = 'AmazonUsers';
     const Admin_Group = 'AdminUsers';
@@ -544,6 +545,43 @@ export class CdkBackendStack extends cdk.Stack {
       sourceArn: cognitoGroupChangeRule.ruleArn,
     });
     
+    // ------------------- Job History: DynamoDB + Lambda + API -------------------
+    const jobHistoryTable = new dynamodb.Table(this, 'JobHistoryTable', {
+      tableName: 'PDFAccessibility-JobHistory',
+      partitionKey: { name: 'user_sub', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'created_at', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
+    const jobHistoryFn = new lambda.Function(this, 'JobHistoryFn', {
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset('lambda/jobHistory'),
+      timeout: cdk.Duration.seconds(30),
+      environment: {
+        TABLE_NAME: jobHistoryTable.tableName,
+      },
+    });
+
+    jobHistoryTable.grantReadWriteData(jobHistoryFn);
+
+    const jobsResource = updateAttributesApi.root.addResource('jobs');
+    jobsResource.addMethod('POST', new apigateway.LambdaIntegration(jobHistoryFn), {
+      authorizer: userPoolAuthorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    });
+    jobsResource.addMethod('GET', new apigateway.LambdaIntegration(jobHistoryFn), {
+      authorizer: userPoolAuthorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    });
+    jobsResource.addMethod('PUT', new apigateway.LambdaIntegration(jobHistoryFn), {
+      authorizer: userPoolAuthorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    });
+
+    mainBranch.addEnvironment('REACT_APP_JOB_HISTORY_API', updateAttributesApi.urlForPath('/jobs'));
+
     // --------------------------- Outputs ------------------------------
     new cdk.CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
     new cdk.CfnOutput(this, 'UserPoolClientId', { value: userPoolClient.userPoolClientId });
@@ -566,6 +604,11 @@ export class CdkBackendStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'CheckUploadQuotaEndpoint', {
       value: updateAttributesApi.urlForPath('/upload-quota'),
+    });
+
+    new cdk.CfnOutput(this, 'JobHistoryEndpoint', {
+      value: updateAttributesApi.urlForPath('/jobs'),
+      description: 'Job history API endpoint',
     });
 
 

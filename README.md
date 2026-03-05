@@ -77,44 +77,65 @@ After deploying the backend, you'll need the **S3 bucket name(s)** created durin
    - PDF-to-HTML bucket name (starts with `pdf2html-bucket-`)
    - At least one bucket name is required
 
-## Automated One-Click Deployment
+## Deployment Options
 
-### Step 1: Open AWS CloudShell and Clone the Repository
+### Option 1: Full Stack Local Deployment (Recommended for Development)
+
+Deploy both backend and frontend from your local repository without GitHub integration:
+
+```bash
+git clone https://github.com/ASUCICREPO/PDF_accessability_UI.git
+cd PDF_accessability_UI
+chmod +x deploy-full-stack-local.sh
+./deploy-full-stack-local.sh [PDF_BUCKET] [HTML_BUCKET]
+```
+
+**Benefits:**
+- No GitHub push required
+- Ideal for local development and testing
+- Full control over deployment process
+- Faster iteration cycles
+
+See [Full Stack Local Deployment Guide](docs/FULL_STACK_LOCAL_DEPLOYMENT.md) for details.
+
+### Option 2: GitHub-Integrated Deployment (Production)
+
+Deploy using CodeBuild with GitHub integration:
+
+#### Step 1: Clone the Repository
 
 ```bash
 git clone https://github.com/ASUCICREPO/PDF_accessability_UI.git
 cd PDF_accessability_UI
 ```
 
-### Step 2: Run the Deployment Script
+#### Step 2: Run the Deployment Script
 
 ```bash
 chmod +x deploy.sh
 ./deploy.sh
 ```
 
-### Step 3: Follow the Interactive Prompts
+#### Step 3: Follow the Interactive Prompts
 
 The script will guide you through:
 
 1. **Bucket Configuration**: Enter your backend S3 bucket names
-
    - PDF-to-PDF bucket name (or leave empty if not using)
    - PDF-to-HTML bucket name (or leave empty if not using)
    - At least one bucket is required
 
 2. **Automated Deployment**: The script will:
-
    - Create IAM roles with necessary permissions
    - Deploy backend infrastructure (Cognito, Lambda, API Gateway)
-   - Build and deploy the React frontend to Amplify
+   - Build and deploy the React frontend to Amplify via CodeBuild
    - Configure all integrations automatically
 
 3. **Deployment Progress**: Monitor real-time deployment status
    - Backend deployment: ~3-5 minutes
    - Frontend deployment: ~5-10 minutes
 
-### Step 4: Access Your Application
+#### Step 4: Access Your Application
 
 After successful deployment, the script will display:
 
@@ -122,6 +143,16 @@ After successful deployment, the script will display:
 ✅ Frontend deployment completed successfully!
 🌐 Frontend URL: https://main.{app-id}.amplifyapp.com
 ```
+
+### Option 3: Frontend-Only Deployment
+
+If backend is already deployed, update just the frontend:
+
+```bash
+./deploy-amplify-direct.sh [PDF_BUCKET] [HTML_BUCKET]
+```
+
+See [Direct Amplify Deployment Guide](docs/DIRECT_AMPLIFY_DEPLOYMENT.md) for details.
 
 Visit the URL to access your PDF Accessibility UI!
 
