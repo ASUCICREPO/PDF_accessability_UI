@@ -80,20 +80,20 @@ const ProcessingContainer = ({
       // Maximum polling time: 30 minutes (120 attempts * 15 seconds = 30 minutes)
       const MAX_POLLING_ATTEMPTS = 120;
 
-      // Increment polling attempts
+      // Increment polling attempts and get current count
+      let currentAttempt = 0;
       setPollingAttempts(prev => {
-        const newAttempts = prev + 1;
+        currentAttempt = prev + 1;
 
         // Stop polling after maximum attempts
-        if (newAttempts >= MAX_POLLING_ATTEMPTS) {
+        if (currentAttempt >= MAX_POLLING_ATTEMPTS) {
           console.warn('⚠️ Maximum polling attempts reached. Stopping file check.');
           clearInterval(intervalId);
           clearInterval(timeIntervalId);
           clearInterval(stepIntervalId);
-          return newAttempts;
         }
 
-        return newAttempts;
+        return currentAttempt;
       });
 
       // Select the correct bucket based on format (same logic as UploadSection)
@@ -156,7 +156,7 @@ const ProcessingContainer = ({
           objectKey = `result/COMPLIANT_${updatedFilename}`;
         }
 
-        console.log(`🔍 Polling attempt ${pollingAttempts + 1}/${MAX_POLLING_ATTEMPTS} for object key:`, objectKey);
+        console.log(`🔍 Polling attempt ${currentAttempt}/${MAX_POLLING_ATTEMPTS} for object key:`, objectKey);
 
         // Check if the processed file exists
         await s3.send(
@@ -203,10 +203,10 @@ const ProcessingContainer = ({
         } catch (failureCheckError) {
           // No failure marker — file is still processing, continue polling
           // Log error for debugging but continue polling (file not ready yet)
-          console.log(`⏳ File not ready yet (attempt ${pollingAttempts + 1}). Retrying in 15 seconds...`);
+          console.log(`⏳ File not ready yet (attempt ${currentAttempt}). Retrying in 15 seconds...`);
 
           // If this is the last attempt, show an error
-          if (pollingAttempts + 1 >= MAX_POLLING_ATTEMPTS) {
+          if (currentAttempt >= MAX_POLLING_ATTEMPTS) {
             console.error('❌ File processing timed out after maximum attempts');
           }
         }
@@ -236,7 +236,7 @@ const ProcessingContainer = ({
       clearInterval(timeIntervalId);
       clearInterval(stepIntervalId);
     };
-  }, [updatedFilename, isFileReady, onFileReady, awsCredentials, originalFileName, selectedFormat, generatePresignedUrl, processingSteps.length, pollingAttempts]);
+  }, [updatedFilename, isFileReady, onFileReady, awsCredentials, originalFileName, selectedFormat, generatePresignedUrl, processingSteps.length]);
 
 
   return (
