@@ -453,7 +453,7 @@ BACKEND_SOURCE='{
 }'
 
 ARTIFACTS='{"type":"NO_ARTIFACTS"}'
-SOURCE_VERSION="main"
+SOURCE_VERSION="adobe-api-fail-handling"
 
 echo "Creating Backend CodeBuild project '$BACKEND_PROJECT_NAME'..."
 aws codebuild create-project \
