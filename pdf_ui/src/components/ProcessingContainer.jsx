@@ -18,6 +18,7 @@ const ProcessingContainer = ({
   const [currentStep, setCurrentStep] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [pollingAttempts, setPollingAttempts] = useState(0);
+  const [processingError, setProcessingError] = useState('');
 
   const processingSteps = [
     { title: "Analyzing Document Structure", description: "Scanning PDF for accessibility issues" },
@@ -181,12 +182,32 @@ const ProcessingContainer = ({
 
         console.log('✅ File processing completed successfully!');
       } catch (error) {
-        // Log error for debugging but continue polling (file not ready yet)
-        console.log(`⏳ File not ready yet (attempt ${pollingAttempts + 1}). Retrying in 15 seconds...`);
+        try {
+          // Check if a failure marker exists
+          const fileBaseName = updatedFilename.replace('.pdf', '');
+          const failureKey = `result/FAILED_${fileBaseName}.json`;
+          
+          await s3.send(new HeadObjectCommand({
+            Bucket: selectedBucket,
+            Key: failureKey,
+          }));
+          
+          // If we get here, the failure marker exists — stop polling and show error
+          console.error('❌ Processing failed: failure marker found at', failureKey);
+          clearInterval(intervalId);
+          clearInterval(timeIntervalId);
+          clearInterval(stepIntervalId);
+          setProcessingError('The PDF file could not be processed. It may be damaged or too complex.');
+          return;
+        } catch (failureCheckError) {
+          // No failure marker — file is still processing, continue polling
+          // Log error for debugging but continue polling (file not ready yet)
+          console.log(`⏳ File not ready yet (attempt ${pollingAttempts + 1}). Retrying in 15 seconds...`);
 
-        // If this is the last attempt, show an error
-        if (pollingAttempts + 1 >= MAX_POLLING_ATTEMPTS) {
-          console.error('❌ File processing timed out after maximum attempts');
+          // If this is the last attempt, show an error
+          if (pollingAttempts + 1 >= MAX_POLLING_ATTEMPTS) {
+            console.error('❌ File processing timed out after maximum attempts');
+          }
         }
       }
     };
@@ -241,7 +262,16 @@ const ProcessingContainer = ({
           </p>
         </div>
 
-        {!isFileReady ? (
+        {processingError ? (
+          <div className="error-section">
+            <div className="error-icon">❌</div>
+            <h3>Processing Failed</h3>
+            <p>{processingError}</p>
+            <button className="upload-new-btn" onClick={onNewUpload}>
+              Upload a Different File
+            </button>
+          </div>
+        ) : !isFileReady ? (
           <div className="progress-section">
             <div className="steps-list">
               {processingSteps.map((step, index) => (
