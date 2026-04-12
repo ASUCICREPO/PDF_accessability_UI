@@ -80,52 +80,53 @@ const ProcessingContainer = ({
       // Maximum polling time: 30 minutes (120 attempts * 15 seconds = 30 minutes)
       const MAX_POLLING_ATTEMPTS = 120;
 
-      try {
-        // Increment polling attempts
-        setPollingAttempts(prev => {
-          const newAttempts = prev + 1;
+      // Increment polling attempts
+      setPollingAttempts(prev => {
+        const newAttempts = prev + 1;
 
-          // Stop polling after maximum attempts
-          if (newAttempts >= MAX_POLLING_ATTEMPTS) {
-            console.warn('⚠️ Maximum polling attempts reached. Stopping file check.');
-            clearInterval(intervalId);
-            clearInterval(timeIntervalId);
-            clearInterval(stepIntervalId);
-            return newAttempts;
-          }
-
+        // Stop polling after maximum attempts
+        if (newAttempts >= MAX_POLLING_ATTEMPTS) {
+          console.warn('⚠️ Maximum polling attempts reached. Stopping file check.');
+          clearInterval(intervalId);
+          clearInterval(timeIntervalId);
+          clearInterval(stepIntervalId);
           return newAttempts;
-        });
-
-        // Select the correct bucket based on format (same logic as UploadSection)
-        const selectedBucket = selectedFormat === 'html' ? HTMLBucket : PDFBucket;
-
-        // Check if Bucket is available
-        if (!selectedBucket) {
-          console.error('❌ Bucket is not defined! Check environment variables.');
-          clearInterval(intervalId);
-          clearInterval(timeIntervalId);
-          clearInterval(stepIntervalId);
-          return;
         }
 
-        // Check if AWS credentials are available
-        if (!awsCredentials?.accessKeyId) {
-          console.warn('⚠️ AWS credentials not available. Stopping polling.');
-          clearInterval(intervalId);
-          clearInterval(timeIntervalId);
-          clearInterval(stepIntervalId);
-          return;
-        }
+        return newAttempts;
+      });
 
-        const s3 = new S3Client({
-          region,
-          credentials: {
-            accessKeyId: awsCredentials.accessKeyId,
-            secretAccessKey: awsCredentials.secretAccessKey,
-            sessionToken: awsCredentials.sessionToken,
-          },
-        });
+      // Select the correct bucket based on format (same logic as UploadSection)
+      const selectedBucket = selectedFormat === 'html' ? HTMLBucket : PDFBucket;
+
+      // Check if Bucket is available
+      if (!selectedBucket) {
+        console.error('❌ Bucket is not defined! Check environment variables.');
+        clearInterval(intervalId);
+        clearInterval(timeIntervalId);
+        clearInterval(stepIntervalId);
+        return;
+      }
+
+      // Check if AWS credentials are available
+      if (!awsCredentials?.accessKeyId) {
+        console.warn('⚠️ AWS credentials not available. Stopping polling.');
+        clearInterval(intervalId);
+        clearInterval(timeIntervalId);
+        clearInterval(stepIntervalId);
+        return;
+      }
+
+      const s3 = new S3Client({
+        region,
+        credentials: {
+          accessKeyId: awsCredentials.accessKeyId,
+          secretAccessKey: awsCredentials.secretAccessKey,
+          sessionToken: awsCredentials.sessionToken,
+        },
+      });
+
+      try {
 
         // Use different paths based on format - apply comprehensive sanitization for HTML only
         let objectKey;
