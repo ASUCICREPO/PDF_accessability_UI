@@ -78,6 +78,7 @@ const ProcessingContainer = ({
     let intervalId;
     let timeIntervalId;
     let stepIntervalId;
+    let attemptCount = 0;
 
     const checkFileAvailability = async () => {
       // Maximum polling time: 30 minutes (120 attempts * 15 seconds = 30 minutes)
@@ -85,20 +86,22 @@ const ProcessingContainer = ({
 
       try {
         // Increment polling attempts
-        setPollingAttempts(prev => {
-          const newAttempts = prev + 1;
+        attemptCount += 1;
+        setPollingAttempts(attemptCount);
 
-          // Stop polling after maximum attempts
-          if (newAttempts >= MAX_POLLING_ATTEMPTS) {
-            console.warn('⚠️ Maximum polling attempts reached. Stopping file check.');
-            clearInterval(intervalId);
-            clearInterval(timeIntervalId);
-            clearInterval(stepIntervalId);
-            return newAttempts;
-          }
-
-          return newAttempts;
-        });
+        // Stop polling after maximum attempts and show a timeout message to the user.
+        if (attemptCount >= MAX_POLLING_ATTEMPTS) {
+          console.warn('⚠️ Maximum polling attempts reached. Stopping file check.');
+          clearInterval(intervalId);
+          clearInterval(timeIntervalId);
+          clearInterval(stepIntervalId);
+          setFailureInfo({
+            summary: 'Processing timed out after 30 minutes. Please try uploading again or contact support if the issue persists.',
+            reasonCategory: 'TIMEOUT',
+            pages: '',
+          });
+          return;
+        }
 
         // Select the correct bucket based on format (same logic as UploadSection)
         const selectedBucket = selectedFormat === 'html' ? HTMLBucket : PDFBucket;
