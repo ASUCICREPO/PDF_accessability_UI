@@ -510,7 +510,7 @@ const LandingPage = () => {
       <strong>Please note the following restrictions before uploading:</strong>
     </Typography>
     <Typography variant="body2" component="p" paragraph>
-      1. Each user is limited to <strong>3</strong> PDF document uploads.
+      1. Each user is limited to <strong>8</strong> PDF document uploads.
     </Typography>
     <Typography variant="body2" component="p" paragraph>
       2. Documents cannot exceed <strong>10</strong> pages.
