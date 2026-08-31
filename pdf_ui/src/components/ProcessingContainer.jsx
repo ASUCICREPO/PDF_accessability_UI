@@ -18,6 +18,10 @@ const ProcessingContainer = ({
   const [currentStep, setCurrentStep] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [pollingAttempts, setPollingAttempts] = useState(0);
+  // Set when the backend reports a processing failure via result/FAILED_<name>.json.
+  // When present, polling stops and a failure message (with reason) is shown instead
+  // of leaving the user waiting until the polling timeout.
+  const [failureInfo, setFailureInfo] = useState(null);
 
   const processingSteps = [
     { title: "Analyzing Document Structure", description: "Scanning PDF for accessibility issues" },
@@ -74,6 +78,7 @@ const ProcessingContainer = ({
     let intervalId;
     let timeIntervalId;
     let stepIntervalId;
+    let attemptCount = 0;
 
     const checkFileAvailability = async () => {
       // Maximum polling time: 30 minutes (120 attempts * 15 seconds = 30 minutes)
@@ -81,20 +86,22 @@ const ProcessingContainer = ({
 
       try {
         // Increment polling attempts
-        setPollingAttempts(prev => {
-          const newAttempts = prev + 1;
+        attemptCount += 1;
+        setPollingAttempts(attemptCount);
 
-          // Stop polling after maximum attempts
-          if (newAttempts >= MAX_POLLING_ATTEMPTS) {
-            console.warn('⚠️ Maximum polling attempts reached. Stopping file check.');
-            clearInterval(intervalId);
-            clearInterval(timeIntervalId);
-            clearInterval(stepIntervalId);
-            return newAttempts;
-          }
-
-          return newAttempts;
-        });
+        // Stop polling after maximum attempts and show a timeout message to the user.
+        if (attemptCount >= MAX_POLLING_ATTEMPTS) {
+          console.warn('⚠️ Maximum polling attempts reached. Stopping file check.');
+          clearInterval(intervalId);
+          clearInterval(timeIntervalId);
+          clearInterval(stepIntervalId);
+          setFailureInfo({
+            summary: 'Processing timed out after 30 minutes. Please try uploading again or contact support if the issue persists.',
+            reasonCategory: 'TIMEOUT',
+            pages: '',
+          });
+          return;
+        }
 
         // Select the correct bucket based on format (same logic as UploadSection)
         const selectedBucket = selectedFormat === 'html' ? HTMLBucket : PDFBucket;
@@ -156,6 +163,53 @@ const ProcessingContainer = ({
 
         console.log(`🔍 Polling attempt ${pollingAttempts + 1}/${MAX_POLLING_ATTEMPTS} for object key:`, objectKey);
 
+        // Before checking for success, check whether the backend reported a failure.
+        // The PDF pipeline writes result/FAILED_<name>.json (name without extension)
+        // on any failure. If present, stop polling and surface the reason to the user
+        // instead of spinning until the polling timeout. (PDF format only; the HTML
+        // pipeline does not emit this marker.)
+        if (selectedFormat !== 'html') {
+          const failedKey = `result/FAILED_${updatedFilename.replace(/\.pdf$/i, '')}.json`;
+          try {
+            const failedObject = await s3.send(
+              new GetObjectCommand({
+                Bucket: selectedBucket,
+                Key: failedKey,
+              })
+            );
+            const failedBody = await failedObject.Body.transformToString();
+            let parsed = {};
+            try {
+              parsed = JSON.parse(failedBody);
+            } catch (parseErr) {
+              console.warn('Could not parse failure marker JSON:', parseErr);
+            }
+
+            console.error('❌ Backend reported a processing failure:', parsed);
+
+            // Build a user-facing list of failed pages, if available.
+            const pages = (parsed.failed_chunks || [])
+              .filter(c => c.page_start && c.page_end)
+              .map(c => `pages ${c.page_start}-${c.page_end}`)
+              .join(', ');
+
+            setFailureInfo({
+              summary: parsed.summary || 'Processing failed. Please try again or contact support.',
+              reasonCategory: parsed.reason_category || 'UNKNOWN',
+              pages,
+            });
+
+            // Stop all polling/animation; a failure is terminal.
+            clearInterval(intervalId);
+            clearInterval(timeIntervalId);
+            clearInterval(stepIntervalId);
+            return;
+          } catch (failedCheckErr) {
+            // No failure marker yet (404) — this is the normal case; continue to
+            // the success check below.
+          }
+        }
+
         // Check if the processed file exists
         await s3.send(
           new HeadObjectCommand({
@@ -191,7 +245,8 @@ const ProcessingContainer = ({
       }
     };
 
-    if (updatedFilename && !isFileReady) {
+    // Do not (re)start polling once the file is ready or a failure was reported.
+    if (updatedFilename && !isFileReady && !failureInfo) {
       // Reset polling attempts for new file
       setPollingAttempts(0);
 
@@ -214,7 +269,7 @@ const ProcessingContainer = ({
       clearInterval(timeIntervalId);
       clearInterval(stepIntervalId);
     };
-  }, [updatedFilename, isFileReady, onFileReady, awsCredentials, originalFileName, selectedFormat, generatePresignedUrl, processingSteps.length, pollingAttempts]);
+  }, [updatedFilename, isFileReady, onFileReady, awsCredentials, originalFileName, selectedFormat, generatePresignedUrl, processingSteps.length, pollingAttempts, failureInfo]);
 
 
   return (
@@ -234,14 +289,31 @@ const ProcessingContainer = ({
             <span>⏱️ Time elapsed: {formatElapsedTime(elapsedTime)}</span>
           </div>
           <p className="processing-description">
-            {isFileReady
-              ? 'Remediation complete! Your file is ready for download.'
-              : 'Remediation process typically takes a few minutes to complete depending on the document complexity'
+            {failureInfo
+              ? 'We were unable to remediate this document.'
+              : isFileReady
+                ? 'Remediation complete! Your file is ready for download.'
+                : 'Remediation process typically takes a few minutes to complete depending on the document complexity'
             }
           </p>
         </div>
 
-        {!isFileReady ? (
+        {failureInfo ? (
+          <div className="failure-section" role="alert">
+            <div className="failure-icon">⚠️</div>
+            <h3 className="failure-title">Remediation Failed</h3>
+            <p className="failure-summary">{failureInfo.summary}</p>
+            {failureInfo.pages && (
+              <p className="failure-pages">Affected: {failureInfo.pages}</p>
+            )}
+            <p className="failure-reason">Reason code: {failureInfo.reasonCategory}</p>
+            {onNewUpload && (
+              <button className="failure-retry-btn" onClick={onNewUpload}>
+                Try another document
+              </button>
+            )}
+          </div>
+        ) : !isFileReady ? (
           <div className="progress-section">
             <div className="steps-list">
               {processingSteps.map((step, index) => (

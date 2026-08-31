@@ -459,3 +459,63 @@
     width: 100%;
   }
 }
+
+/* Failure state shown when the backend writes result/FAILED_<name>.json */
+.failure-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 32px 24px;
+  background: #fdf2f2;
+  border: 1px solid #f5c6cb;
+  border-radius: 12px;
+  margin-top: 8px;
+}
+
+.failure-icon {
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: 12px;
+}
+
+.failure-title {
+  margin: 0 0 8px;
+  color: #842029;
+  font-size: 20px;
+}
+
+.failure-summary {
+  margin: 0 0 8px;
+  color: #5c1a1f;
+  font-size: 15px;
+  max-width: 520px;
+}
+
+.failure-pages {
+  margin: 0 0 4px;
+  color: #842029;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.failure-reason {
+  margin: 0 0 16px;
+  color: #9a6b6f;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.failure-retry-btn {
+  background: #c0392b;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.failure-retry-btn:hover {
+  background: #a93226;
+}
