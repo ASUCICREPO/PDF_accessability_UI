@@ -4,6 +4,8 @@ This document outlines the specific IAM permissions required to deploy and opera
 
 > **Note:** This UI requires the backend PDF Accessibility solutions to be deployed first.
 
+> **Regions:** Commercial AWS regions only. AWS Amplify Hosting is not offered in AWS GovCloud (US), so the UI cannot be deployed there.
+
 ## Overview
 
 The PDF Accessibility UI deployment creates a complete web application with user authentication, quota management, and secure file handling. The deployment process uses AWS CodeBuild to automate infrastructure provisioning and frontend deployment.

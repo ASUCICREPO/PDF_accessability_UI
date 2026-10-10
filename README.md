@@ -4,6 +4,8 @@ This repository provides the **web-based user interface** for the PDF Accessibil
 
 > **⚠️ Important:** This is the frontend UI component. You must first deploy the [PDF Accessibility Backend](https://github.com/ASUCICREPO/PDF_Accessibility) before deploying this UI.
 
+> **Supported regions:** Commercial AWS regions only. The UI cannot be deployed in AWS GovCloud (US) because AWS Amplify Hosting is not offered there. The [backend solutions](https://github.com/ASUCICREPO/PDF_Accessibility) do support GovCloud.
+
 ## Disclaimers
 
 Customers are responsible for making their own independent assessment of the information in this document.
@@ -61,7 +63,7 @@ After deploying the backend, you'll need the **S3 bucket name(s)** created durin
 
 ### System Requirements
 
-1. **AWS Account** with appropriate permissions
+1. **AWS Account** in a commercial AWS region (not AWS GovCloud) with appropriate permissions
 
    - Amplify, Cognito, Lambda, API Gateway, S3, IAM, CloudFormation
    - See [IAM Permissions Guide](docs/IAM_PERMISSIONS.md) for detailed requirements
